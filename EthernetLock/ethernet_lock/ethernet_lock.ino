@@ -91,18 +91,43 @@ bool checkValidFingerprintID(int id) {
   delay(100);
 
   // Just output response for now
-  while (client.connected()) {
-    if (client.available()) {
-      char c = client.read();
-      Serial.print(c);
-    }
-  }
+  int statusCode = parseHTTPStatusCode();
 
   Serial.println();
   Serial.println("disconnecting.");
   client.stop(); 
 
-  return true;
+  Serial.print("Status Code: "); Serial.println(statusCode);
+
+  return statusCode == 200;
+}
+
+int parseHTTPStatusCode()
+{
+  boolean inStatus = false;
+  char statusCode[4];
+  int i = 0;
+
+  while (client.connected()) {
+    if (client.available()) {
+      char c = client.read();
+      Serial.print(c);
+      if (c == ' ' && !inStatus) {
+        inStatus = true;
+      }
+
+      if (inStatus && i < 3 && c != ' ') {
+        statusCode[i] = c;
+        i++;
+      }
+
+      if (i == 3) {
+        statusCode[i] = '\0';
+      }
+    }
+  }
+
+  return atoi(statusCode);
 }
 
 // returns -1 if failed, otherwise returns ID #
