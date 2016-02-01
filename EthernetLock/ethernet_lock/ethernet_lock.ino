@@ -10,8 +10,7 @@ void unlock();
 
 // Fingerprint related variables
 SoftwareSerial mySerial(2, 3);
-int unlockPin = 12;
-int lockPin = 11;
+int solenoidPin = 12;
 bool locked = true;
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 
@@ -24,8 +23,7 @@ EthernetClient client;
 void setup()  
 {
   // Make sure we're locked
-  pinMode(unlockPin, OUTPUT);
-  pinMode(lockPin, OUTPUT);
+  pinMode(solenoidPin, OUTPUT);
   lock();
   
   Serial.begin(9600);
@@ -53,11 +51,6 @@ void setup()
 
 void loop()                     // run over and over again
 {
-  if (!locked) {
-    delay(5000);
-    lock();
-  }
-  
   readFingerprint();
   delay(50);
 }
@@ -69,9 +62,7 @@ void readFingerprint()
   id = getFingerprintIDez();
   if (id == -1) return;
   // Check if ID is in server's valid list
-  if (checkValidFingerprintID(id)) {
-    unlock();
-  }
+  checkValidFingerprintID(id) ? unlock() : lock();
 }
 
 bool checkValidFingerprintID(int id) {
@@ -150,15 +141,13 @@ int getFingerprintIDez() {
 
 void lock() {
   Serial.print("Locking...\n");
-  digitalWrite(lockPin, HIGH);
-  digitalWrite(unlockPin, LOW);
+  digitalWrite(solenoidPin, HIGH);
   locked = true;
 }
 
 void unlock() {
   Serial.print("Unlocking...\n");
-  digitalWrite(lockPin, LOW);
-  digitalWrite(unlockPin, HIGH);
+  digitalWrite(solenoidPin, LOW);
   locked = false;
 }
 
