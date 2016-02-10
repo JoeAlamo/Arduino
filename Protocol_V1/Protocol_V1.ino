@@ -86,22 +86,25 @@ bool performRemoteAuthentication(char *client_id) {
   delay(100);
 
   // Just output response for now
-  int statusCode = parseHTTPStatusCode();
+  int expires = 0;
+  int statusCode = parseHTTPResponse(&expires);
 
   Serial.println();
   Serial.println("disconnecting.");
   client.stop(); 
 
   Serial.print("Status Code: "); Serial.println(statusCode);
+  Serial.print("Authentication duration (seconds): "); Serial.println(expires);
 
   return statusCode == 200;
 }
 
-int parseHTTPStatusCode()
+int parseHTTPResponse(int *expires)
 {
-  boolean inStatus = false;
-  char statusCode[4];
+  boolean inStatus = false, inBody = false;
+  char statusCode[4], body[50];
   int i = 0;
+  int newLineCount = 0, bodyCount = 0;
 
   while (client.connected()) {
     if (client.available()) {
@@ -119,10 +122,38 @@ int parseHTTPStatusCode()
       if (i == 3) {
         statusCode[i] = '\0';
       }
+
+      if (c == '\n' && newLineCount == 1) {
+        inBody = true;
+      }
+
+      if (c == '\n' && !inBody) {
+        newLineCount++;
+      }
+
+      if (c != '\n' && c != '\r' && newLineCount > 0 && !inBody) {
+        newLineCount--;
+      }
+
+      if (inBody && bodyCount < 50) {
+        body[bodyCount] = c;
+        bodyCount++;
+      }
     }
   }
 
+  if (bodyCount) {
+     parseExpiresJson(expires, body); 
+  }
+
   return atoi(statusCode);
+}
+
+void parseExpiresJson(int *expires, char* json) 
+{
+  StaticJsonBuffer<50> jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(json);
+  *expires = root.get<int>("expires");
 }
 
 // returns -1 if failed, otherwise returns ID #
