@@ -12,6 +12,7 @@ bool convertFingerprintToTemplate();
 bool verifyFingerprint(uint16_t fingerprintID);
 void getStoredAuthenticationKey(uint8_t *akBuf, uint16_t akBufSize);
 bool performRemoteAuthentication(unsigned int *verifiedDuration);
+void sendRequest();
 int parseHTTPResponse(char *body, unsigned int *bodyLen, unsigned int maxBodyLen);
 bool parseExpiresJson(unsigned int *expires, char *json);
 void exitProgram();
@@ -128,7 +129,8 @@ bool performRemoteAuthentication(unsigned int *verifiedDuration) {
 void sendRequest() {
   Serial.println(F("Sending request"));
   // Make JSON payload
-  StaticJsonBuffer<100> jsonBuffer;
+  const int BUFFER_SIZE = JSON_OBJECT_SIZE(1);
+  StaticJsonBuffer<BUFFER_SIZE> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
   root["client_id"] = client_id;
   int len = root.measureLength();
