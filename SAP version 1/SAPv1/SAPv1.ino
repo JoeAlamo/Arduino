@@ -32,6 +32,7 @@ EthernetClient client;
 const char client_id[] = "bvczTsQJnDTVl3Oeg27poA==";
 bool hasBeenVerified = false;
 unsigned long verifiedExpiration = 0;
+unsigned int verifiedDuration = 0;
 
 // RUN ONCE
 void setup() {
@@ -55,41 +56,43 @@ void setup() {
 
   Serial.println(F("Ethernet activated"));
   Serial.println(F("Place valid fingerprint when ready."));
-} 
 
-// MAIN PROGRAM LOOP
-void loop() {
-  while (!currentlyVerified() && !currentlyBlocked()) {
-    if (scanFingerprint() && convertFingerprintToTemplate()) {
-      if (verifyFingerprint(fingerprintID)) {
-        Serial.println(F("Your fingerprint matched."));
-        uint8_t authenticationKey[32] = {0};
-        getStoredAuthenticationKey(authenticationKey, 32);
-        Serial.println(F("Beginning SAPv1"));
-        unsigned int verifiedDuration = 0;
-        Serial.println(verifiedDuration);
-        hasBeenVerified = performRemoteAuthentication(&verifiedDuration);
-        if (hasBeenVerified) {
-          verifiedExpiration = millis() + (verifiedDuration * 1000);
-          Serial.print(F("Authentication successful. You have "));
-          Serial.print(verifiedDuration);
-          Serial.println(F(" seconds to log in"));
+  while (1) {
+    if (currentlyVerified() || currentlyBlocked()) {
+      delay(500);
+    } else {
+      if (scanFingerprint() && convertFingerprintToTemplate()) {
+        if (verifyFingerprint(fingerprintID)) {
+          Serial.println(F("Your fingerprint matched."));
+          uint8_t authenticationKey[32] = {0};
+          getStoredAuthenticationKey(authenticationKey, 32);
+          Serial.println(F("Beginning SAPv1"));
+          hasBeenVerified = performRemoteAuthentication(&verifiedDuration);
+          if (hasBeenVerified) {
+            verifiedExpiration = millis() + (verifiedDuration * 1000);
+            Serial.print(F("Authentication successful. You have "));
+            Serial.print(verifiedDuration);
+            Serial.println(F(" seconds to log in"));
+          } else {
+            Serial.println(F("Authentication unsuccessful"));
+            delay(2000);
+          }
         } else {
-          Serial.println(F("Authentication unsuccessful"));
-          delay(2000);
+          Serial.println(F("Your fingerprint didn't match. Try again."));
         }
       } else {
-        Serial.println(F("Your fingerprint didn't match. Try again."));
+        delay(50);
       }
-    } else {
-      delay(50);
     }
   }
-}
+} 
+
+void loop() {}
 
 // SAPv1 FUNCTIONS
 
 bool performRemoteAuthentication(unsigned int *verifiedDuration) {
+  *verifiedDuration = 0;
   if (!client.connect(server, 80)) {
     Serial.println(F("Failed to connect"));
     return false;
