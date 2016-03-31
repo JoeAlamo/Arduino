@@ -114,7 +114,6 @@ bool performRemoteAuthentication(unsigned int *verifiedDuration) {
   // If 200 then payload with expires should be present
   if (statusCode == 200 && bodyLen > 0) {
     // Parse expires
-    Serial.println(*verifiedDuration);
     bool successfulParse = parseExpiresJson(verifiedDuration, responseBody);
     if (successfulParse && *verifiedDuration > 0) {
       Serial.print(F("Authentication duration (seconds): ")); Serial.println(*verifiedDuration);
@@ -127,6 +126,7 @@ bool performRemoteAuthentication(unsigned int *verifiedDuration) {
 }
 
 void sendRequest() {
+  Serial.println(F("Sending request"));
   // Make JSON payload
   StaticJsonBuffer<100> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
@@ -151,6 +151,8 @@ int parseHTTPResponse(char *body, unsigned int *bodyLen, unsigned int maxBodyLen
   int statusCodeLen = 0;
   int newLineCount = 0;
   *bodyLen = 0;
+
+  Serial.println(F("Receiving response"));
 
   while (client.connected()) {
     if (client.available()) {
@@ -199,12 +201,10 @@ int parseHTTPResponse(char *body, unsigned int *bodyLen, unsigned int maxBodyLen
 
 bool parseExpiresJson(unsigned int *expires, char *json) 
 {
-  Serial.println(*expires);
   StaticJsonBuffer<100> jsonBuffer;
   JsonObject& root = jsonBuffer.parseObject(json);
   if (root.success() && root.containsKey("expires")) {
     *expires = root.get<unsigned int>("expires");
-    Serial.println(*expires);
 
     return true;
   } else {
