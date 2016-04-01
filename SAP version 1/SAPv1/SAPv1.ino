@@ -150,7 +150,12 @@ void sendRequest() {
   int len = root.measureLength();
 
   // Make a HTTP request:
-  client.println(F("POST http://www.joekeilty.co.uk/authentication/v1/biometric HTTP/1.1"));
+  if (usingFiddler) {
+    client.println(F("POST http://www.joekeilty.co.uk/authentication/v1/biometric HTTP/1.1"));
+  } else {
+    client.println(F("POST /authentication/v1/biometric HTTP/1.1"));
+  }
+
   client.println(F("Host: www.joekeilty.co.uk"));
   client.println(F("Content-Type: application/json"));
   client.print(F("Content-Length: "));client.println(len);
