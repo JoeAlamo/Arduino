@@ -41,7 +41,7 @@ bool verifyFingerprint(uint16_t fingerprintID) {
 
 /* Is client currently verified? */
 bool currentlyVerified() {
-  // Is verifiedExpiration less than millis() ?
+  // Have we been verified and is verifiedExpiration in the future?
   return hasBeenVerified && verifiedExpiration > millis();
 };
 

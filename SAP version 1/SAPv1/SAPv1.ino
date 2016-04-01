@@ -24,10 +24,12 @@ Adafruit_Fingerprint fingerprintSensor = Adafruit_Fingerprint(&mySerial);
 uint16_t fingerprintID = 1;
 
 // ETHERNET VARIABLES
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xEF };
 IPAddress server(217, 160, 93, 179);
-IPAddress ip(192, 168, 0, 50);
+IPAddress fiddler(192, 168, 0, 153);
+IPAddress ip(192, 168, 0, 200);
 EthernetClient client;
+bool usingFiddler = true;
 
 // PROTOCOL VARIABLES
 const char client_id[] = "bvczTsQJnDTVl3Oeg27poA==";
@@ -48,14 +50,18 @@ void setup() {
     exitProgram();
   }
 
-  // Check that we can get Ethernet connection
-  if (Ethernet.begin(mac) == 0) {
-    Serial.println(F("Failed to configure Ethernet using DHCP"));
-    // try to congifure using IP address instead of DHCP:
+  if (usingFiddler) {
     Ethernet.begin(mac, ip);
+  } else {
+    // Check that we can get Ethernet connection
+    if (Ethernet.begin(mac) == 0) {
+      Serial.println(F("Failed to configure Ethernet using DHCP"));
+      // try to congifure using IP address instead of DHCP:
+      Ethernet.begin(mac, ip);
+    }    
   }
 
-  Serial.println(F("Ethernet activated"));
+  Serial.print(F("Ethernet activated - local IP:"));Serial.println(Ethernet.localIP());
   Serial.println(F("Place valid fingerprint when ready."));
 
   while (1) {
@@ -94,10 +100,18 @@ void loop() {}
 
 bool performRemoteAuthentication(unsigned int *verifiedDuration) {
   *verifiedDuration = 0;
-  if (!client.connect(server, 80)) {
-    Serial.println(F("Failed to connect"));
-    return false;
+  if (usingFiddler) {
+    if (!client.connect(fiddler, 8888)) {
+      Serial.println(F("Failed to connect"));
+      return false;
+    }
+  } else {
+    if (!client.connect(server, 80)) {
+      Serial.println(F("Failed to connect"));
+      return false;
+    }
   }
+
   Serial.println(F("Connected"));
 
   sendRequest();
@@ -136,7 +150,7 @@ void sendRequest() {
   int len = root.measureLength();
 
   // Make a HTTP request:
-  client.println(F("POST /authentication/v1/biometric HTTP/1.1"));
+  client.println(F("POST http://www.joekeilty.co.uk/authentication/v1/biometric HTTP/1.1"));
   client.println(F("Host: www.joekeilty.co.uk"));
   client.println(F("Content-Type: application/json"));
   client.print(F("Content-Length: "));client.println(len);
@@ -148,10 +162,10 @@ void sendRequest() {
 // Retrieve status code from HTTP response
 // Attempt to parse response body up to maxBodyLen into body
 int parseHTTPResponse(char *body, unsigned int *bodyLen, unsigned int maxBodyLen) {
-  boolean inStatus = false, inBody = false;
+  boolean inStatus = false, parsedStatus = false, inBody = false;
   char statusCode[4];
   int statusCodeLen = 0;
-  int newLineCount = 0;
+  int consecutiveNewLineCount = 0;
   *bodyLen = 0;
 
   Serial.println(F("Receiving response"));
@@ -161,40 +175,40 @@ int parseHTTPResponse(char *body, unsigned int *bodyLen, unsigned int maxBodyLen
       char c = client.read();
       Serial.print(c);
       // STATUS CODE PARSING
-      if (c == ' ' && !inStatus) {
-        inStatus = true;
+      if (!parsedStatus) {
+        // First space means status code is expected
+        if (c == ' ' && !inStatus) {
+          inStatus = true;
+        // Copy character if we haven't copied 3 yet
+        } else if (inStatus && statusCodeLen < 3) {
+          statusCode[statusCodeLen] = c;
+          statusCodeLen++;
+        // End of status code, insert null terminator, stop parsing status code
+        } else if (inStatus && statusCodeLen == 3) {
+          statusCode[statusCodeLen] = '\0';
+          inStatus = false;
+          parsedStatus = true;
+        }
       }
 
-      if (inStatus && statusCodeLen < 3 && c != ' ') {
-        statusCode[statusCodeLen] = c;
-        statusCodeLen++;
+      if (!inBody) {
+        // 2 newlines in a row means we expect the body
+        if (c == '\n' && consecutiveNewLineCount == 1) {
+          inBody = true;
+        // 1 newline in a row means we're at the end of a header
+        } else if (c == '\n') {
+          consecutiveNewLineCount++;
+        // We just had a newline and now are parsing another header
+        } else if (c != '\r' && consecutiveNewLineCount > 0) {
+          consecutiveNewLineCount--;
+        }
+      } else {
+        if (*bodyLen < maxBodyLen) {
+          body[*bodyLen] = c;
+          *bodyLen = *bodyLen + 1;          
+        }
       }
-
-      if (statusCodeLen == 3) {
-        statusCode[statusCodeLen] = '\0';
-      }
-      
-      // DETECT IF IN BODY (response body is separated from headers by 2 NL)
-      if (c == '\n' && newLineCount == 1) {
-        inBody = true;
-      }
-
-      // Increment newline count if not already in response body
-      // This means we are at the end of a header
-      if (c == '\n' && !inBody) {
-        newLineCount++;
-      }
-
-      // We have just started parsing another header, decrease new line count
-      if (c != '\n' && c != '\r' && newLineCount > 0 && !inBody) {
-        newLineCount--;
-      }
-
-      // If we are in response body, keep parsing body until maxBodyLen is reached
-      if (inBody && *bodyLen < maxBodyLen) {
-        body[*bodyLen] = c;
-        *bodyLen = *bodyLen + 1;
-      }
+    
     } 
   }
 
