@@ -10,6 +10,17 @@ typedef struct Stage1Response {
   uint8_t server_id[16];
 } Stage1Response;
 
+typedef struct Stage2Request {
+  uint8_t client_id[16];
+  uint8_t client_random[16];
+  uint8_t client_mac[16];
+} Stage2Request;
+
+typedef struct Stage2Response {
+  uint8_t server_mac[16];
+  unsigned int expires;
+} Stage2Response;
+
 // BIOMETRIC VERIFICATION FUNCTION DEFINITIONS
 bool currentlyVerified();
 bool currentlyBlocked();
@@ -21,6 +32,8 @@ void getStoredAuthenticationKey(uint8_t *akBuf, uint16_t akBufSize);
 bool performRemoteAuthentication(unsigned int *verifiedDuration, uint8_t *authKey);
 bool performStage1(Stage1Response *stage1Response);
 void sendStage1Request();
+bool performStage2(Stage2Request *stage2Request, Stage2Response *stage2Response);
+void sendStage2Request(Stage2Request *stage2Request);
 int parseHTTPResponse(char *body, unsigned int *bodyLen, unsigned int maxBodyLen);
 bool parseStage1Json(Stage1Response *stage1Response, char *json);
 // UTILITY FUNCTION DEFINITIONS
@@ -33,19 +46,19 @@ Adafruit_Fingerprint fingerprintSensor = Adafruit_Fingerprint(&mySerial);
 uint16_t fingerprintID = 1;
 
 // ETHERNET VARIABLES
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xAD };
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xBD };
 IPAddress server(217, 160, 93, 179);
 IPAddress fiddler(192, 168, 0, 153);
-IPAddress ip(192, 168, 0, 205);
+IPAddress ip(192, 168, 0, 120);
 EthernetClient client;
-bool usingFiddler = true;
+bool usingFiddler = false;
 
 // PROTOCOL VARIABLES
-const uint8_t client_id[16] = {
+const uint8_t client_id_stored[16] = {
   0x6e, 0xf7, 0x33, 0x4e, 0xc4, 0x09, 0x9c, 0x34,
   0xd5, 0x97, 0x73, 0x9e, 0x83, 0x6e, 0xe9, 0xa0
 };
-const uint8_t server_id[16] = {
+const uint8_t server_id_stored[16] = {
   0x04, 0x56, 0x19, 0xe5, 0xc1, 0xad, 0x3b, 0xd4,
   0xac, 0xa8, 0x4c, 0xee, 0x52, 0xb5, 0xae, 0xee
 };
@@ -142,6 +155,8 @@ bool performRemoteAuthentication(unsigned int *verifiedDuration, uint8_t *authKe
     return false;
   }
 
+  printHex(stage1Response.session_id, 16);
+  printHex(stage1Response.server_id, 16);
   // If 200 then payload with session_id and server_id should be present
 //  if (statusCode == 200 && bodyLen > 0) {
 //    // Parse session_id and server_id
