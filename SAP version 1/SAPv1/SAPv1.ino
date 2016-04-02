@@ -24,10 +24,10 @@ Adafruit_Fingerprint fingerprintSensor = Adafruit_Fingerprint(&mySerial);
 uint16_t fingerprintID = 1;
 
 // ETHERNET VARIABLES
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xEF };
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xAD };
 IPAddress server(217, 160, 93, 179);
 IPAddress fiddler(192, 168, 0, 153);
-IPAddress ip(192, 168, 0, 200);
+IPAddress ip(192, 168, 0, 205);
 EthernetClient client;
 bool usingFiddler = true;
 
@@ -131,6 +131,7 @@ bool performRemoteAuthentication(unsigned int *verifiedDuration) {
     // Parse expires
     bool successfulParse = parseExpiresJson(verifiedDuration, responseBody);
     if (successfulParse && *verifiedDuration > 0) {
+      *verifiedDuration = *verifiedDuration > 60 ? 60 : *verifiedDuration;
       Serial.print(F("Authentication duration (seconds): ")); Serial.println(*verifiedDuration);
 
       return true;
