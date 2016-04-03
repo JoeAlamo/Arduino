@@ -48,6 +48,7 @@ bool parseStage1Json(Stage1Response *stage1Response, char *json)
   char session_id_B64[25] = {0}, server_id_B64[25] = {0};
   strncpy(session_id_B64, root.get<const char*>("session_id"), 24);
   strncpy(server_id_B64, root.get<const char*>("server_id"), 24);
+
   if (strlen(session_id_B64) == 0 || strlen(server_id_B64) == 0) {
     Serial.println(F("Empty payload values"));
     return false;
@@ -60,9 +61,10 @@ bool parseStage1Json(Stage1Response *stage1Response, char *json)
     return false;
   }
 
-  char session_id[session_idDecLen];
+
+  char session_id[session_idDecLen+1];
   base64_decode(session_id, session_id_B64, 24);
-  char server_id[server_idDecLen];
+  char server_id[server_idDecLen+1];
   base64_decode(server_id, server_id_B64, 24);
 
   // Verify server_id provided is identical. Do this in constant time.
