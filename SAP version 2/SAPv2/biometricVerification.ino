@@ -9,7 +9,6 @@ bool scanFingerprint() {
     case FINGERPRINT_NOFINGER:
       return false;
     default:
-      Serial.println("Error scanning, please retry.");
       return false;
   }
 };

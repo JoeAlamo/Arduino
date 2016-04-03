@@ -1,6 +1,7 @@
 #include <Adafruit_Fingerprint.h>
 #include <ArduinoJson.h>
 #include <Base64.h>
+#include <Entropy.h>
 #include <Ethernet.h>
 #include <SHA256.h>
 #include <SoftwareSerial.h>
@@ -76,6 +77,8 @@ void setup() {
   Serial.begin(9600);
   fingerprintSensor.begin(57600);
 
+  Entropy.initialize();
+
   // Check that fingerprint sensor is connected
   if (fingerprintSensor.verifyPassword()) {
     Serial.println(F("Fingerprint sensor is connected."));
@@ -122,7 +125,7 @@ void setup() {
           Serial.println(F("Your fingerprint didn't match. Try again."));
         }
       } else {
-        delay(50);
+        delay(250);
       }
     }
   }
@@ -187,19 +190,11 @@ bool performRemoteAuthentication(unsigned int *verifiedDuration, uint8_t *authKe
     Serial.println(F("Stage 2 failed"));
     return false;
   }
-  // If 200 then payload with session_id and server_id should be present
-//  if (statusCode == 200 && bodyLen > 0) {
-//    // Parse session_id and server_id
-//    bool successfulParse = parseExpiresJson(verifiedDuration, responseBody);
-//    if (successfulParse && *verifiedDuration > 0) {
-//      *verifiedDuration = *verifiedDuration > 60 ? 60 : *verifiedDuration;
-//      Serial.print(F("Authentication duration (seconds): ")); Serial.println(*verifiedDuration);
-//
-//      return true;
-//    }
-//  }
 
-  return false;
+  *verifiedDuration = stage2Response.expires;
+  Serial.print(F("Authentication duration (seconds): ")); Serial.println(*verifiedDuration);
+
+  return true;
 }
 
 

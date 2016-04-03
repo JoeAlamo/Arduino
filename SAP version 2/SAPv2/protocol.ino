@@ -97,6 +97,27 @@ bool performStage2(Stage1Response *stage1Response, Stage2Request *stage2Request,
   if (statusCode != 200 || bodyLen < 1) {
     return false;
   }  
+
+  if (!parseStage2Json(stage2Response, responseBody)) {
+    return false;
+  }
+
+  // Crypto verify server_mac
+  uint8_t calculatedServerMac[16] = {0};
+  SHA256 sha256;
+  sha256.resetHMAC(authKey, 32);
+  sha256.update(stage1Response->server_id, 16);
+  sha256.update(stage2Request->client_random, 16);
+  sha256.finalizeHMAC(authKey, 32, calculatedServerMac, 16);
+  if (!cryptoSecureCompare(calculatedServerMac, stage2Response->server_mac, 16)) {
+    Serial.println(F("Invalid server_mac"));
+    return false;
+  }
+
+  // Truncate expires
+  stage2Response->expires = stage2Response->expires > 60 ? 60 : stage2Response->expires;
+
+  return true;
 }
 
 void sendStage2Request(Stage1Response *stage1Response, Stage2Request *stage2Request, uint8_t *authKey) {
@@ -106,11 +127,18 @@ void sendStage2Request(Stage1Response *stage1Response, Stage2Request *stage2Requ
   // Retrieve client_id
   memcpy(stage2Request->client_id, client_id_stored, 16);
   // Calculate client_mac
+  sha256.resetHMAC(authKey, 32);
   sha256.update(stage2Request->client_id, 16);
   sha256.update(stage1Response->server_id, 16);
   sha256.update(stage1Response->session_id, 16);
   sha256.update(stage2Request->client_random, 16);
   sha256.finalizeHMAC(authKey, 32, stage2Request->client_mac, 16);
+  printHex(stage2Request->client_id, 16);
+  printHex(stage1Response->server_id, 16);
+  printHex(stage1Response->session_id, 16);
+  printHex(stage2Request->client_random, 16);
+  printHex(stage2Request->client_mac, 16);
+  printHex(authKey, 32);
   // Construct JSON
   const int BUFFER_SIZE = JSON_OBJECT_SIZE(3);
   StaticJsonBuffer<BUFFER_SIZE> jsonBuffer;
@@ -142,16 +170,48 @@ void sendStage2Request(Stage1Response *stage1Response, Stage2Request *stage2Requ
 }
 
 void generateClientRandom(Stage2Request *stage2Request) {
-  // TODO: PROPER RANDOM GENERATION
-  randomSeed(analogRead(0));
   uint8_t i;
   for (i=0; i < 16; i++) {
-    stage2Request->client_random[i] = random(255);
+    stage2Request->client_random[i] = Entropy.randomByte();
   }
 }
 
 bool parseStage2Json(Stage2Response *stage2Response, char *json) {
+  delay(100);
+  StaticJsonBuffer<100> jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(json);
+  if (!root.success() || !root.containsKey("server_mac") || !root.containsKey("expires")) {
+    Serial.println(F("Malformed payload"));
+    return false;
+  }
+
+  char server_mac_B64[25] = {0};
+  strncpy(server_mac_B64, root.get<const char*>("server_mac"), 24);
+
+  if (strlen(server_mac_B64) == 0) {
+    Serial.println(F("Empty payload values"));
+    return false;
+  }
+
+  int server_macDecLen = base64_dec_len(server_mac_B64, strlen(server_mac_B64));
+  if (server_macDecLen != 16) {
+    Serial.println(F("Invalid payload value lengths"));
+    return false;
+  }
+
+  char server_mac[server_macDecLen+1];
+  base64_decode(server_mac, server_mac_B64, 24);
+
+  unsigned int expires = root.get<unsigned int>("expires");
+  if (expires < 1) {
+    Serial.println(F("Invalid expires field"));
+  }
   
+  // Copy to Stage2Response structure
+  memcpy(stage2Response->server_mac, server_mac, 16);
+  stage2Response->expires = expires;
+  
+  return true;  
 }
 
 // Retrieve status code from HTTP response
