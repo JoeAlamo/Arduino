@@ -20,7 +20,7 @@ bool performStage1(Stage1Response *stage1Response) {
 }
 
 void sendStage1Request() {
-  Serial.println(F("Sending request"));
+  Serial.println(F("Sending stage 1"));
 
   // Make a HTTP request:
   if (usingFiddler) {
@@ -57,6 +57,7 @@ bool parseStage1Json(Stage1Response *stage1Response, char *json)
   int server_idDecLen = base64_dec_len(server_id_B64, strlen(server_id_B64));
   if (session_idDecLen != 16 || server_idDecLen != 16) {
     Serial.println(F("Invalid payload value lengths"));
+    return false;
   }
 
   char session_id[session_idDecLen];
@@ -75,6 +76,80 @@ bool parseStage1Json(Stage1Response *stage1Response, char *json)
   memcpy(stage1Response->server_id, server_id, 16);
   
   return true;
+}
+
+bool performStage2(Stage1Response *stage1Response, Stage2Request *stage2Request, Stage2Response *stage2Response, uint8_t *authKey) {
+  Serial.println(F("Starting stage 2"));
+  sendStage2Request(stage1Response, stage2Request, authKey);
+  delay(100);
+
+  // Parse status code and response body
+  char responseBody[101] = {0};
+  unsigned int bodyLen = 0;
+  int statusCode = parseHTTPResponse(responseBody, &bodyLen, 100);
+
+  Serial.print(F("\n\nDisconnecting.\n\n"));
+  client.stop(); 
+  Serial.print(F("Status Code: ")); Serial.println(statusCode);
+
+  if (statusCode != 200 || bodyLen < 1) {
+    return false;
+  }  
+}
+
+void sendStage2Request(Stage1Response *stage1Response, Stage2Request *stage2Request, uint8_t *authKey) {
+  SHA256 sha256;
+  // Randomly generate client_random
+  generateClientRandom(stage2Request);
+  // Retrieve client_id
+  memcpy(stage2Request->client_id, client_id_stored, 16);
+  // Calculate client_mac
+  sha256.update(stage2Request->client_id, 16);
+  sha256.update(stage1Response->server_id, 16);
+  sha256.update(stage1Response->session_id, 16);
+  sha256.update(stage2Request->client_random, 16);
+  sha256.finalizeHMAC(authKey, 32, stage2Request->client_mac, 16);
+  // Construct JSON
+  const int BUFFER_SIZE = JSON_OBJECT_SIZE(3);
+  StaticJsonBuffer<BUFFER_SIZE> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  // base64 encode fields before adding to JSON object
+  char client_randomB64[25], client_idB64[25], client_macB64[25], session_idB64[25];
+  base64_encode(client_randomB64, (char *)stage2Request->client_random, 16);
+  base64_encode(client_idB64, (char *)stage2Request->client_id, 16);
+  base64_encode(client_macB64, (char *)stage2Request->client_mac, 16);
+  base64_encode(session_idB64, (char *)stage1Response->session_id, 16);
+  // Populate JSON object
+  root["client_id"] = client_idB64;
+  root["client_random"] = client_randomB64;
+  root["client_mac"] = client_macB64;
+  int len = root.measureLength();
+  // Send request
+  if (usingFiddler) {
+    client.print(F("POST http://www.joekeilty.co.uk/authentication/v2/biometric/"));
+  } else {
+    client.print(F("POST /authentication/v2/biometric/"));
+  }
+  client.print(session_idB64); client.println(F(" HTTP/1.1"));
+  client.println(F("Host: www.joekeilty.co.uk"));
+  client.println(F("Content-Type: application/json"));
+  client.print(F("Content-Length: "));client.println(len);
+  client.println(F("Connection: close"));
+  client.println();
+  root.printTo(client);
+}
+
+void generateClientRandom(Stage2Request *stage2Request) {
+  // TODO: PROPER RANDOM GENERATION
+  randomSeed(analogRead(0));
+  uint8_t i;
+  for (i=0; i < 16; i++) {
+    stage2Request->client_random[i] = random(255);
+  }
+}
+
+bool parseStage2Json(Stage2Response *stage2Response, char *json) {
+  
 }
 
 // Retrieve status code from HTTP response

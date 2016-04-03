@@ -2,8 +2,10 @@
 #include <ArduinoJson.h>
 #include <Base64.h>
 #include <Ethernet.h>
+#include <SHA256.h>
 #include <SoftwareSerial.h>
 #include <SPI.h>
+
 // STRUCTURES
 typedef struct Stage1Response {
   uint8_t session_id[16];
@@ -32,16 +34,18 @@ void getStoredAuthenticationKey(uint8_t *akBuf, uint16_t akBufSize);
 bool performRemoteAuthentication(unsigned int *verifiedDuration, uint8_t *authKey);
 bool performStage1(Stage1Response *stage1Response);
 void sendStage1Request();
-bool performStage2(Stage2Request *stage2Request, Stage2Response *stage2Response);
-void sendStage2Request(Stage2Request *stage2Request);
-int parseHTTPResponse(char *body, unsigned int *bodyLen, unsigned int maxBodyLen);
 bool parseStage1Json(Stage1Response *stage1Response, char *json);
+bool performStage2(Stage1Response *stage1Response, Stage2Request *stage2Request, Stage2Response *stage2Response, uint8_t *authKey);
+void sendStage2Request(Stage1Response *stage1Response, Stage2Request *stage2Request, uint8_t *authKey);
+void generateClientRandom(Stage2Request *stage2Request);
+bool parseStage2Json(Stage2Response *stage2Response, char *json);
+int parseHTTPResponse(char *body, unsigned int *bodyLen, unsigned int maxBodyLen);
 // UTILITY FUNCTION DEFINITIONS
 void exitProgram();
 void printHex(const uint8_t *input, uint16_t len);
 
 // FINGERPRINT SENSOR VARIABLES
-SoftwareSerial mySerial(2,3);
+SoftwareSerial mySerial(11,12);
 Adafruit_Fingerprint fingerprintSensor = Adafruit_Fingerprint(&mySerial);
 uint16_t fingerprintID = 1;
 
@@ -149,14 +153,40 @@ bool performRemoteAuthentication(unsigned int *verifiedDuration, uint8_t *authKe
     /* server_id */{0}
   };
 
-  bool stage1Success = performStage1(&stage1Response);
-  if (!stage1Success) {
+  if (!performStage1(&stage1Response)) {
     Serial.println(F("Stage 1 failed"));
     return false;
   }
 
   printHex(stage1Response.session_id, 16);
   printHex(stage1Response.server_id, 16);
+
+  Stage2Request stage2Request = {
+    /* client_id */ {0},
+    /* client_random */ {0},
+    /* client_mac */ {0}
+  };
+  Stage2Response stage2Response = {
+    /* server_mac */ {0},
+    /* expires */ 0
+  };
+
+  if (usingFiddler) {
+    if (!client.connect(fiddler, 8888)) {
+      Serial.println(F("Failed to connect"));
+      return false;
+    }
+  } else {
+    if (!client.connect(server, 80)) {
+      Serial.println(F("Failed to connect"));
+      return false;
+    }
+  }
+
+  if (!performStage2(&stage1Response, &stage2Request, &stage2Response, authKey)) {
+    Serial.println(F("Stage 2 failed"));
+    return false;
+  }
   // If 200 then payload with session_id and server_id should be present
 //  if (statusCode == 200 && bodyLen > 0) {
 //    // Parse session_id and server_id
