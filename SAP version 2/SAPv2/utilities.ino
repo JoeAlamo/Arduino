@@ -21,6 +21,7 @@ void printHex(uint8_t *input, uint16_t len) {
       Serial.print(", ");
     } else {
       Serial.println();
+      Serial.println();
     }
  }
 }

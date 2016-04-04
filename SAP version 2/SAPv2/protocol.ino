@@ -76,6 +76,12 @@ bool parseStage1Json(Stage1Response *stage1Response, char *json)
   // Copy to Stage1Response structure
   memcpy(stage1Response->session_id, session_id, 16);
   memcpy(stage1Response->server_id, server_id, 16);
+
+  // Print
+  Serial.print(F("\nsession_id:"));
+  printHex(stage1Response->session_id, 16);
+  Serial.print(F("\nserver_id:"));
+  printHex(stage1Response->server_id, 16);
   
   return true;
 }
@@ -109,6 +115,8 @@ bool performStage2(Stage1Response *stage1Response, Stage2Request *stage2Request,
   sha256.update(stage1Response->server_id, 16);
   sha256.update(stage2Request->client_random, 16);
   sha256.finalizeHMAC(authKey, 32, calculatedServerMac, 16);
+  Serial.print(F("\nCalculated server_mac:"));
+  printHex(calculatedServerMac, 16);
   if (!cryptoSecureCompare(calculatedServerMac, stage2Response->server_mac, 16)) {
     Serial.println(F("Invalid server_mac"));
     return false;
@@ -133,12 +141,15 @@ void sendStage2Request(Stage1Response *stage1Response, Stage2Request *stage2Requ
   sha256.update(stage1Response->session_id, 16);
   sha256.update(stage2Request->client_random, 16);
   sha256.finalizeHMAC(authKey, 32, stage2Request->client_mac, 16);
+  Serial.print(F("\nclient_id:"));
   printHex(stage2Request->client_id, 16);
-  printHex(stage1Response->server_id, 16);
-  printHex(stage1Response->session_id, 16);
+  Serial.print(F("\nclient_random:"));
   printHex(stage2Request->client_random, 16);
-  printHex(stage2Request->client_mac, 16);
+  Serial.print(F("\nauthentication key:"));
   printHex(authKey, 32);
+  Serial.print(F("\nclient_mac:"));
+  printHex(stage2Request->client_mac, 16);
+
   // Construct JSON
   const int BUFFER_SIZE = JSON_OBJECT_SIZE(3);
   StaticJsonBuffer<BUFFER_SIZE> jsonBuffer;
@@ -210,6 +221,10 @@ bool parseStage2Json(Stage2Response *stage2Response, char *json) {
   // Copy to Stage2Response structure
   memcpy(stage2Response->server_mac, server_mac, 16);
   stage2Response->expires = expires;
+
+  // Print
+  Serial.print(F("\nReceived server_mac:"));
+  printHex(stage2Response->server_mac, 16);
   
   return true;  
 }

@@ -161,9 +161,6 @@ bool performRemoteAuthentication(unsigned int *verifiedDuration, uint8_t *authKe
     return false;
   }
 
-  printHex(stage1Response.session_id, 16);
-  printHex(stage1Response.server_id, 16);
-
   Stage2Request stage2Request = {
     /* client_id */ {0},
     /* client_random */ {0},
