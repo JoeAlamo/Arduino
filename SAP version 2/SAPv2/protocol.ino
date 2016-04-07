@@ -216,6 +216,7 @@ bool parseStage2Json(Stage2Response *stage2Response, char *json) {
   unsigned int expires = root.get<unsigned int>("expires");
   if (expires < 1) {
     Serial.println(F("Invalid expires field"));
+    return false;
   }
   
   // Copy to Stage2Response structure
