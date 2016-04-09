@@ -1,7 +1,7 @@
 bool performStage2(Stage1Response *stage1Response, Stage2Request *stage2Request, Stage2Response *stage2Response, CryptoKeys *cryptoKeys) {
   Serial.println(F("Starting stage 2"));
   sendStage2Request(stage1Response, stage2Request, cryptoKeys);
-  delay(100);
+  delay(300);
 
   // Parse status code and response body
   char responseBody[151] = {0};
@@ -18,7 +18,7 @@ bool performStage2(Stage1Response *stage1Response, Stage2Request *stage2Request,
     return false;
   }  
 
-  char ciphertextB64[80] = {0}, tagB64[25];
+  char ciphertextB64[80] = {0}, tagB64[25] = {0};
   int ciphertextB64Len = 0;
 
   if (!parseStage2Json(ciphertextB64, &ciphertextB64Len, tagB64, responseBody)) {
@@ -79,7 +79,7 @@ void sendStage2Request(Stage1Response *stage1Response, Stage2Request *stage2Requ
   // Generate session key
   generateSessionKey(&sha256, stage1Response, stage2Request, cryptoKeys);
   // Encrypt and tag
-  char ciphertextB64[150] = {0}, tagB64[25];
+  char ciphertextB64[150] = {0}, tagB64[25] = {0};
   int ciphertextB64Len = 0;
   encryptAndTag(stage1Response, stage2Request, cryptoKeys, ciphertextB64, tagB64);
 
@@ -114,23 +114,20 @@ void sendStage2Request(Stage1Response *stage1Response, Stage2Request *stage2Requ
 }
 
 bool retrieveTimestamp(uint32_t *timestamp) {
-  /* Taken from https://www.arduino.cc/en/Tutorial/UdpNtpClient and modified */
   unsigned int localPort = 8888;       // local port to listen for UDP packets
-  char timeServer[] = "time.nist.gov"; // time.nist.gov NTP server(s) - round robin
-  const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
-  byte packetBuffer[NTP_PACKET_SIZE] = {0}; //buffer to hold incoming and outgoing packets
+
   EthernetUDP Udp;
   Udp.begin(localPort);
 
   int tsFailCount = 0;
 
-  while (!sendAndReceiveNTPPacket(&Udp, timestamp) && tsFailCount < 30) {
+  while (tsFailCount < 30 && !sendAndReceiveNTPPacket(&Udp, timestamp)) {
     tsFailCount++;
   }
 
   Udp.stop();
 
-  return tsFailCount != 10;
+  return tsFailCount != 30;
 }
 
 bool sendAndReceiveNTPPacket(EthernetUDP *Udp, uint32_t *timestamp) {
@@ -145,11 +142,6 @@ bool sendAndReceiveNTPPacket(EthernetUDP *Udp, uint32_t *timestamp) {
   packetBuffer[1] = 16;     // Stratum, or type of clock
   packetBuffer[2] = 6;     // Polling Interval
   packetBuffer[3] = 0xEC;  // Peer Clock Precision
-  // 8 bytes of zero for Root Delay & Root Dispersion
-//  packetBuffer[12]  = 49;
-//  packetBuffer[13]  = 0x4E;
-//  packetBuffer[14]  = 49;
-//  packetBuffer[15]  = 52;
 
   // send a packet requesting a timestamp:
   Udp->beginPacket(timeServer, 123); //NTP requests are to port 123
@@ -267,7 +259,6 @@ void encryptAndTag(Stage1Response *stage1Response, Stage2Request *stage2Request,
 }
 
 bool parseStage2Json(char *ciphertextB64, int *ciphertextB64Len, char *tagB64, char *json) {
-  delay(100);
   StaticJsonBuffer<150> jsonBuffer;
   JsonObject& root = jsonBuffer.parseObject(json);
   if (!root.success() || !root.containsKey("ciphertext") || !root.containsKey("tag")) {

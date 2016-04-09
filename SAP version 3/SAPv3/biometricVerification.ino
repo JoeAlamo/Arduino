@@ -64,7 +64,7 @@ void getStoredKeys(CryptoKeys *cryptoKeys, uint16_t keyLens) {
     0x62, 0xaf, 0x55, 0xdc, 0x71, 0xbe, 0x2c, 0x45
   };
 
-  uint16_t len = 32, i;
+  uint16_t len = 32;
 
   if (keyLens < len) {
     Serial.println("Key release failure");
