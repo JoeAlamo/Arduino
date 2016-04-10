@@ -39,6 +39,9 @@ bool scanFingerprint();
 bool convertFingerprintToTemplate();
 bool verifyFingerprint(uint16_t fingerprintID);
 void getStoredKeys(CryptoKeys *cryptoKeys, uint16_t keyLens);
+void reportFailedVerificationAttempt();
+void sendFailedVerificationRequest();
+void parseFailedVerificationResponse();
 // PROTOCOL FUNCTION DEFINITIONS
 bool performRemoteAuthentication(unsigned int *verifiedDuration, CryptoKeys *cryptoKeys);
 bool performStage1(Stage1Response *stage1Response);
@@ -87,6 +90,8 @@ const uint8_t server_id_stored[16] = {
 unsigned long unixUTCTimestamp = 0;
 unsigned long timestampLastRetrievedAt = 0;
 
+unsigned int failedVerificationAttempts = 0;
+
 bool hasBeenVerified = false;
 unsigned long verifiedExpiration = 0;
 unsigned int verifiedDuration = 0;
@@ -133,6 +138,7 @@ void setup() {
     } else {
       if (scanFingerprint() && convertFingerprintToTemplate()) {
         if (verifyFingerprint(fingerprintID)) {
+          failedVerificationAttempts = 0;
           Serial.println(F("Your fingerprint matched."));
           CryptoKeys cryptoKeys = {
             /* authKey */ {0},
@@ -153,6 +159,11 @@ void setup() {
           }
         } else {
           Serial.println(F("Your fingerprint didn't match. Try again."));
+          failedVerificationAttempts++;
+          if (failedVerificationAttempts == 3) {
+            reportFailedVerificationAttempt();
+            failedVerificationAttempts = 0;
+          }
         }
       } else {
         delay(250);
@@ -162,8 +173,6 @@ void setup() {
 } 
 
 void loop() {}
-
-// SAPv1 FUNCTIONS
 
 bool performRemoteAuthentication(unsigned int *verifiedDuration, CryptoKeys *cryptoKeys) {
   *verifiedDuration = 0;

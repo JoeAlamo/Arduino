@@ -1,7 +1,7 @@
 bool performStage1(Stage1Response *stage1Response) {
   Serial.println(F("Starting stage 1"));
   sendStage1Request();
-  delay(100);
+  delay(300);
 
   // Parse status code and response body
   char responseBody[101] = {0};

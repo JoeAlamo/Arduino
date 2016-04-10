@@ -15,6 +15,7 @@ bool performStage2(Stage1Response *stage1Response, Stage2Request *stage2Request,
   if (statusCode != 200 || bodyLen < 1) {
     // May be due to invalid timestamp - lets update
     retrieveTimestamp(&unixUTCTimestamp);
+    timestampLastRetrievedAt = millis() / 1000;
     return false;
   }  
 
